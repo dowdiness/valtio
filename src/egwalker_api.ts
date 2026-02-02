@@ -41,13 +41,25 @@ export interface EgWalkerProxyResult<T> {
 
   /**
    * Undo the last operation (if undoManager is enabled)
+   * Returns sync ops as Operation[] for peer broadcast
    */
-  undo: () => void;
+  undo: () => Operation[];
 
   /**
    * Redo the last undone operation (if undoManager is enabled)
+   * Returns sync ops as Operation[] for peer broadcast
    */
-  redo: () => void;
+  redo: () => Operation[];
+
+  /**
+   * Check if undo is possible
+   */
+  canUndo: () => boolean;
+
+  /**
+   * Check if redo is possible
+   */
+  canRedo: () => boolean;
 
   /**
    * Get pending operations for network sync
@@ -109,6 +121,8 @@ export function createEgWalkerProxySync<T extends TextState>(
     get_frontier_raw_json,
     undo: moonbitUndo,
     redo: moonbitRedo,
+    can_undo: moonbitCanUndo,
+    can_redo: moonbitCanRedo,
     dispose_proxy,
   } = valtioEgwalker;
 
@@ -121,6 +135,15 @@ export function createEgWalkerProxySync<T extends TextState>(
   // Store instance for FFI callbacks
   instanceMap.set(proxyState, proxyState);
 
+  // Helper to broadcast sync ops from undo/redo
+  const broadcastSyncOps = (opsJson: string) => {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    const ops: Operation[] = JSON.parse(opsJson);
+    for (const op of ops) {
+      ws.send(JSON.stringify({ type: 'operation', room: config.roomId, op }));
+    }
+  };
+
   // Set up WebSocket sync if configured
   let ws: WebSocket | null = null;
   if (config.websocketUrl && config.roomId) {
@@ -130,16 +153,30 @@ export function createEgWalkerProxySync<T extends TextState>(
   return {
     proxy: proxyState as T,
 
-    undo: () => {
-      if (config.undoManager) {
-        moonbitUndo(proxyState);
-      }
+    undo: (): Operation[] => {
+      if (!config.undoManager) return [];
+      const opsJson: string = moonbitUndo(proxyState);
+      const ops: Operation[] = JSON.parse(opsJson);
+      broadcastSyncOps(opsJson);
+      return ops;
     },
 
-    redo: () => {
-      if (config.undoManager) {
-        moonbitRedo(proxyState);
-      }
+    redo: (): Operation[] => {
+      if (!config.undoManager) return [];
+      const opsJson: string = moonbitRedo(proxyState);
+      const ops: Operation[] = JSON.parse(opsJson);
+      broadcastSyncOps(opsJson);
+      return ops;
+    },
+
+    canUndo: (): boolean => {
+      if (!config.undoManager || !moonbitCanUndo) return false;
+      return moonbitCanUndo(proxyState);
+    },
+
+    canRedo: (): boolean => {
+      if (!config.undoManager || !moonbitCanRedo) return false;
+      return moonbitCanRedo(proxyState);
     },
 
     getPendingOps: () => {
@@ -241,6 +278,8 @@ export async function createEgWalkerProxy<T extends TextState>(
     get_frontier_raw_json,
     undo: moonbitUndo,
     redo: moonbitRedo,
+    can_undo: moonbitCanUndo,
+    can_redo: moonbitCanRedo,
     dispose_proxy,
   } = valtioEgwalker;
 
@@ -253,6 +292,15 @@ export async function createEgWalkerProxy<T extends TextState>(
   // Store instance for FFI callbacks
   instanceMap.set(proxyState, proxyState);
 
+  // Helper to broadcast sync ops from undo/redo
+  const broadcastSyncOps = (opsJson: string) => {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    const ops: Operation[] = JSON.parse(opsJson);
+    for (const op of ops) {
+      ws.send(JSON.stringify({ type: 'operation', room: config.roomId, op }));
+    }
+  };
+
   // Set up WebSocket sync if configured
   let ws: WebSocket | null = null;
   if (config.websocketUrl && config.roomId) {
@@ -262,16 +310,30 @@ export async function createEgWalkerProxy<T extends TextState>(
   return {
     proxy: proxyState as T,
 
-    undo: () => {
-      if (config.undoManager) {
-        moonbitUndo(proxyState);
-      }
+    undo: (): Operation[] => {
+      if (!config.undoManager) return [];
+      const opsJson: string = moonbitUndo(proxyState);
+      const ops: Operation[] = JSON.parse(opsJson);
+      broadcastSyncOps(opsJson);
+      return ops;
     },
 
-    redo: () => {
-      if (config.undoManager) {
-        moonbitRedo(proxyState);
-      }
+    redo: (): Operation[] => {
+      if (!config.undoManager) return [];
+      const opsJson: string = moonbitRedo(proxyState);
+      const ops: Operation[] = JSON.parse(opsJson);
+      broadcastSyncOps(opsJson);
+      return ops;
+    },
+
+    canUndo: (): boolean => {
+      if (!config.undoManager || !moonbitCanUndo) return false;
+      return moonbitCanUndo(proxyState);
+    },
+
+    canRedo: (): boolean => {
+      if (!config.undoManager || !moonbitCanRedo) return false;
+      return moonbitCanRedo(proxyState);
     },
 
     getPendingOps: () => {

@@ -17,26 +17,10 @@ pub struct EgWalkerProxy {
   mut is_applying_remote : Bool
   /// Subscription handle for cleanup
   mut subscription : ValtioSubscription?
-  /// Undo stack for local operations
-  undo_stack : Array[UndoEntry]
-  /// Redo stack
-  redo_stack : Array[UndoEntry]
-  /// Whether undo/redo is enabled
+  /// Whether undo/redo is enabled (uses UndoManager via crdt module FFI)
   undo_enabled : Bool
-}
-
-///|
-/// Entry in undo/redo stack
-pub struct UndoEntry {
-  op_type : OpType
-  position : Int
-  content : String
-}
-
-///|
-pub enum OpType {
-  Insert
-  Delete
+  /// JSON ops from last undo/redo call, for peer sync
+  mut undo_sync_ops : String
 }
 
 ///|
@@ -46,7 +30,11 @@ pub fn EgWalkerProxy::new(
   agent_id : String,
   undo_enabled? : Bool = false,
 ) -> EgWalkerProxy {
-  let doc = create_document(agent_id)
+  let doc = if undo_enabled {
+    create_document_with_undo(agent_id, 500)
+  } else {
+    create_document(agent_id)
+  }
   let proxy_state = create_text_proxy("")
   {
     proxy_state,
@@ -54,9 +42,8 @@ pub fn EgWalkerProxy::new(
     pending_ops: [],
     is_applying_remote: false,
     subscription: None,
-    undo_stack: [],
-    redo_stack: [],
     undo_enabled,
+    undo_sync_ops: "[]",
   }
 }
 
@@ -89,40 +76,33 @@ pub fn EgWalkerProxy::init(self : EgWalkerProxy) -> Unit {
 /// Called when Valtio proxy is mutated
 fn EgWalkerProxy::handle_proxy_change(self : EgWalkerProxy) -> Unit {
   let new_text = get_string(self.proxy_state, "text")
-  let old_text = document_to_text(self.doc)
-  if new_text == old_text {
-    return
-  }
-
-  // Calculate diff and generate operations
-  let ops = calculate_diff(old_text, new_text)
-
-  // Apply operations to CRDT
-  for op in ops {
-    match op {
-      DiffOp::Insert(pos, text) => {
-        let crdt_op = document_insert(self.doc, pos, text)
-        self.pending_ops.push(crdt_op)
-        if self.undo_enabled {
-          self.undo_stack.push({ op_type: Insert, position: pos, content: text })
-          self.redo_stack.clear()
-        }
-      }
-      DiffOp::Delete(pos, len) =>
-        for i = 0; i < len; i = i + 1 {
-          let crdt_op = document_delete(self.doc, pos)
+  if self.undo_enabled {
+    // Use UndoManager-integrated path: diff + record via crdt module
+    let old_text = document_get_text(self.doc)
+    if new_text == old_text {
+      return
+    }
+    let ts = get_timestamp_ms()
+    document_set_text_and_record(self.doc, new_text, ts)
+  } else {
+    // Original path: diff + apply to local CRDT document
+    let old_text = document_to_text(self.doc)
+    if new_text == old_text {
+      return
+    }
+    let ops = calculate_diff(old_text, new_text)
+    for op in ops {
+      match op {
+        DiffOp::Insert(pos, text) => {
+          let crdt_op = document_insert(self.doc, pos, text)
           self.pending_ops.push(crdt_op)
-          if self.undo_enabled && i == 0 {
-            // Store deleted text for undo
-            let deleted = old_text[pos:pos + len].to_string() catch { _ => "" }
-            self.undo_stack.push({
-              op_type: Delete,
-              position: pos,
-              content: deleted,
-            })
-            self.redo_stack.clear()
-          }
         }
+        DiffOp::Delete(pos, len) =>
+          for i = 0; i < len; i = i + 1 {
+            let crdt_op = document_delete(self.doc, pos)
+            self.pending_ops.push(crdt_op)
+          }
+      }
     }
   }
 
@@ -140,11 +120,25 @@ pub fn EgWalkerProxy::apply_remote(
 ) -> Unit {
   self.is_applying_remote = true
 
+  // Disable undo tracking during remote op application
+  if self.undo_enabled {
+    undo_manager_set_tracking(self.doc, false)
+  }
+
   // Apply to CRDT document
   document_apply_remote(self.doc, op)
 
+  // Re-enable undo tracking
+  if self.undo_enabled {
+    undo_manager_set_tracking(self.doc, true)
+  }
+
   // Sync to Valtio proxy
-  let new_text = document_to_text(self.doc)
+  let new_text = if self.undo_enabled {
+    document_get_text(self.doc)
+  } else {
+    document_to_text(self.doc)
+  }
   set_string(self.proxy_state, "text", new_text)
   self.is_applying_remote = false
 }
@@ -158,100 +152,89 @@ pub fn EgWalkerProxy::apply_remote_batch(
 ) -> Unit {
   self.is_applying_remote = true
 
+  // Disable undo tracking during remote op application
+  if self.undo_enabled {
+    undo_manager_set_tracking(self.doc, false)
+  }
+
   // Apply each operation
   for op in ops {
     document_apply_remote(self.doc, op)
   }
 
+  // Re-enable undo tracking
+  if self.undo_enabled {
+    undo_manager_set_tracking(self.doc, true)
+  }
+
   // Sync to Valtio proxy
-  let new_text = document_to_text(self.doc)
+  let new_text = if self.undo_enabled {
+    document_get_text(self.doc)
+  } else {
+    document_to_text(self.doc)
+  }
   set_string(self.proxy_state, "text", new_text)
   self.is_applying_remote = false
 }
 
 ///|
-/// Undo/Redo Support
-/// Undo the last local operation
+/// Undo the last local operation group
+/// Uses UndoManager via crdt module FFI when enabled
+/// Returns JSON string of ops for peer sync (stored in undo_sync_ops)
 pub fn EgWalkerProxy::undo(self : EgWalkerProxy) -> Unit {
-  if not(self.undo_enabled) || self.undo_stack.is_empty() {
+  if not(self.undo_enabled) {
     return
   }
-  match self.undo_stack.pop() {
-    Some(entry) => {
-      self.is_applying_remote = true
-      match entry.op_type {
-        Insert => {
-          // Undo insert by deleting
-          let current_text = get_string(self.proxy_state, "text")
-          let part1 = current_text[0:entry.position].to_string() catch {
-            _ => ""
-          }
-          let part2 = current_text[entry.position + entry.content.length():].to_string() catch {
-            _ => ""
-          }
-          set_string(self.proxy_state, "text", part1 + part2)
-        }
-        Delete => {
-          // Undo delete by inserting
-          let current_text = get_string(self.proxy_state, "text")
-          let part1 = current_text[0:entry.position].to_string() catch {
-            _ => ""
-          }
-          let part2 = current_text[entry.position:].to_string() catch {
-            _ => ""
-          }
-          set_string(self.proxy_state, "text", part1 + entry.content + part2)
-        }
-      }
-
-      // Move to redo stack
-      self.redo_stack.push(entry)
-      self.is_applying_remote = false
-    }
-    None => ()
-  }
+  self.is_applying_remote = true
+  let ops_json = undo_manager_undo(self.doc)
+  self.undo_sync_ops = ops_json
+  // Update proxy text from document
+  let new_text = document_get_text(self.doc)
+  set_string(self.proxy_state, "text", new_text)
+  self.is_applying_remote = false
 }
 
 ///|
-/// Redo the last undone operation
+/// Redo the last undone operation group
+/// Uses UndoManager via crdt module FFI when enabled
+/// Returns JSON string of ops for peer sync (stored in undo_sync_ops)
 pub fn EgWalkerProxy::redo(self : EgWalkerProxy) -> Unit {
-  if not(self.undo_enabled) || self.redo_stack.is_empty() {
+  if not(self.undo_enabled) {
     return
   }
-  match self.redo_stack.pop() {
-    Some(entry) => {
-      self.is_applying_remote = true
-      match entry.op_type {
-        Insert => {
-          // Redo insert
-          let current_text = get_string(self.proxy_state, "text")
-          let part1 = current_text[0:entry.position].to_string() catch {
-            _ => ""
-          }
-          let part2 = current_text[entry.position:].to_string() catch {
-            _ => ""
-          }
-          set_string(self.proxy_state, "text", part1 + entry.content + part2)
-        }
-        Delete => {
-          // Redo delete
-          let current_text = get_string(self.proxy_state, "text")
-          let part1 = current_text[0:entry.position].to_string() catch {
-            _ => ""
-          }
-          let part2 = current_text[entry.position + entry.content.length():].to_string() catch {
-            _ => ""
-          }
-          set_string(self.proxy_state, "text", part1 + part2)
-        }
-      }
+  self.is_applying_remote = true
+  let ops_json = undo_manager_redo(self.doc)
+  self.undo_sync_ops = ops_json
+  // Update proxy text from document
+  let new_text = document_get_text(self.doc)
+  set_string(self.proxy_state, "text", new_text)
+  self.is_applying_remote = false
+}
 
-      // Move back to undo stack
-      self.undo_stack.push(entry)
-      self.is_applying_remote = false
-    }
-    None => ()
+///|
+/// Check if undo is possible
+pub fn EgWalkerProxy::can_undo(self : EgWalkerProxy) -> Bool {
+  if not(self.undo_enabled) {
+    return false
   }
+  undo_manager_can_undo(self.doc)
+}
+
+///|
+/// Check if redo is possible
+pub fn EgWalkerProxy::can_redo(self : EgWalkerProxy) -> Bool {
+  if not(self.undo_enabled) {
+    return false
+  }
+  undo_manager_can_redo(self.doc)
+}
+
+///|
+/// Get the last undo/redo sync ops JSON and clear it
+pub fn EgWalkerProxy::get_undo_sync_ops(self : EgWalkerProxy) -> String {
+  let ops = self.undo_sync_ops
+  self.undo_sync_ops = "[]"
+  ops
 }
 
 ///|

@@ -30,8 +30,10 @@ interface ValtioEgwalkerModule {
   get_pending_ops_json: (proxy: any) => string;
   get_frontier_json: (proxy: any) => string;
   get_frontier_raw_json: (proxy: any) => string;
-  undo: (proxy: any) => void;
-  redo: (proxy: any) => void;
+  undo: (proxy: any) => string;
+  redo: (proxy: any) => string;
+  can_undo: (proxy: any) => boolean;
+  can_redo: (proxy: any) => boolean;
   dispose_proxy: (proxy: any) => void;
   get_undo_stack_size?: (proxy: any) => number;
   get_redo_stack_size?: (proxy: any) => number;
@@ -212,19 +214,41 @@ export function createEgWalkerProxy<T extends TextState>(
     wsConnection = setupWebSocketSync(proxyState, config.websocketUrl, config.roomId, suppressUndoTracking);
   }
 
+  // Helper to broadcast sync ops from undo/redo via WebSocket
+  const broadcastSyncOps = (ops: Operation[]) => {
+    if (!wsConnection || !wsConnection.ws || wsConnection.ws.readyState !== WebSocket.OPEN) return;
+    for (const op of ops) {
+      wsConnection.ws.send(JSON.stringify({ type: 'operation', room: config.roomId, op }));
+    }
+  };
+
   return {
     proxy: proxyState as T,
 
-    undo: () => {
-      if (config.undoManager) {
-        moonbit.undo(proxyState);
-      }
+    undo: (): Operation[] => {
+      if (!config.undoManager) return [];
+      const opsJson: string = moonbit.undo(proxyState);
+      const ops: Operation[] = JSON.parse(opsJson);
+      broadcastSyncOps(ops);
+      return ops;
     },
 
-    redo: () => {
-      if (config.undoManager) {
-        moonbit.redo(proxyState);
-      }
+    redo: (): Operation[] => {
+      if (!config.undoManager) return [];
+      const opsJson: string = moonbit.redo(proxyState);
+      const ops: Operation[] = JSON.parse(opsJson);
+      broadcastSyncOps(ops);
+      return ops;
+    },
+
+    canUndo: (): boolean => {
+      if (!config.undoManager) return false;
+      return moonbit.can_undo(proxyState);
+    },
+
+    canRedo: (): boolean => {
+      if (!config.undoManager) return false;
+      return moonbit.can_redo(proxyState);
     },
 
     getPendingOps: () => {

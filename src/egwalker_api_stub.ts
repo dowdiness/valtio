@@ -15,8 +15,10 @@ export type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'rec
 
 export interface EgWalkerProxyResult<T> {
   proxy: T;
-  undo: () => void;
-  redo: () => void;
+  undo: () => Operation[];
+  redo: () => Operation[];
+  canUndo: () => boolean;
+  canRedo: () => boolean;
   getPendingOps: () => Operation[];
   applyRemoteOp: (op: Operation) => void;
   getFrontier: () => number[];
@@ -503,16 +505,28 @@ export function createEgWalkerProxy<T extends TextState>(
   return {
     proxy: proxyState as T,
 
-    undo: () => {
+    undo: (): Operation[] => {
       if (config.undoManager) {
         moonbitUndo(proxyState);
       }
+      // Stub doesn't generate real CRDT ops for undo
+      return [];
     },
 
-    redo: () => {
+    redo: (): Operation[] => {
       if (config.undoManager) {
         moonbitRedo(proxyState);
       }
+      // Stub doesn't generate real CRDT ops for redo
+      return [];
+    },
+
+    canUndo: (): boolean => {
+      return get_undo_stack_size(proxyState) > 0;
+    },
+
+    canRedo: (): boolean => {
+      return get_redo_stack_size(proxyState) > 0;
     },
 
     getPendingOps: () => {
