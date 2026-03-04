@@ -8,16 +8,22 @@
 ///|
 /// A Valtio proxy object that tracks mutations
 #external
+///|
+/// External handle for a Valtio proxy object.
 pub type ValtioProxy
 
 ///|
 /// An immutable snapshot of proxy state for rendering
 #external
+///|
+/// External handle for a Valtio snapshot.
 pub type ValtioSnapshot
 
 ///|
 /// A subscription handle that can be used to unsubscribe
 #external
+///|
+/// External handle for a Valtio subscription.
 pub type ValtioSubscription
 
 ///|

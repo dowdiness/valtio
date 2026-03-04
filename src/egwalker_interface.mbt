@@ -6,12 +6,16 @@
 /// CRDT Operation Type
 /// Represents a single CRDT operation
 #external
+///|
+/// External handle for a CRDT operation.
 pub type CRDTOperation
 
 ///|
 /// CRDT Document Type
 /// Represents the event-graph-walker Document
 #external
+///|
+/// External handle for a CRDT document instance.
 pub type CRDTDocument
 
 ///|
