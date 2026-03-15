@@ -1,4 +1,4 @@
 {
   "is_main": false,
-  "import": []
+  "import": ["dowdiness/text_change"]
 }

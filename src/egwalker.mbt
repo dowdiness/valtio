@@ -281,37 +281,13 @@ priv enum DiffOp {
 
 ///|
 fn calculate_diff(old_text : String, new_text : String) -> Array[DiffOp] {
+  let change = @text_change.compute_text_change(old_text, new_text)
   let ops : Array[DiffOp] = []
-
-  // Simple diff algorithm: find longest common prefix/suffix
-  let mut i = 0
-  let old_len = old_text.length()
-  let new_len = new_text.length()
-
-  // Find common prefix
-  while i < old_len && i < new_len && old_text[i] == new_text[i] {
-    i = i + 1
+  if change.delete_len > 0 {
+    ops.push(Delete(change.start, change.delete_len))
   }
-
-  // Find common suffix
-  let mut j = 0
-  while j < old_len - i &&
-        j < new_len - i &&
-        old_text[old_len - 1 - j] == new_text[new_len - 1 - j] {
-    j = j + 1
-  }
-  let old_middle_len = old_len - i - j
-  let new_middle_len = new_len - i - j
-
-  // Handle deletions
-  if old_middle_len > 0 {
-    ops.push(Delete(i, old_middle_len))
-  }
-
-  // Handle insertions
-  if new_middle_len > 0 {
-    let inserted = new_text[i:i + new_middle_len].to_string() catch { _ => "" }
-    ops.push(Insert(i, inserted))
+  if change.inserted.length() > 0 {
+    ops.push(Insert(change.start, change.inserted))
   }
   ops
 }
