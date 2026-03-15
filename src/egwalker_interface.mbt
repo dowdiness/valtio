@@ -94,7 +94,7 @@ pub extern "js" fn operation_from_json(json : String) -> CRDTOperation =
 ///|
 /// Create a document with UndoManager support
 /// Calls crdt module's create_editor_with_undo which sets up both
-/// the ParsedEditor and the UndoManager in the crdt module's global state
+/// the SyncEditor and the UndoManager in the crdt module's global state
 pub extern "js" fn create_document_with_undo(
   agent_id : String,
   capture_timeout_ms : Int,
