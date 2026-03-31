@@ -1,0 +1,7 @@
+import {
+  "dowdiness/text_change",
+}
+
+options(
+  is_main: false,
+)

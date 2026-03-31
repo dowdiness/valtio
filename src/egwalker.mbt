@@ -64,7 +64,7 @@ fn create_text_proxy(initial_text : String) -> ValtioProxy {
 pub fn EgWalkerProxy::init(self : EgWalkerProxy) -> Unit {
   // Subscribe to proxy changes
   let sub = subscribe(self.proxy_state, fn() {
-    if not(self.is_applying_remote) {
+    if !self.is_applying_remote {
       self.handle_proxy_change()
     }
   })
@@ -182,7 +182,7 @@ pub fn EgWalkerProxy::apply_remote_batch(
 /// Uses UndoManager via crdt module FFI when enabled
 /// Returns JSON string of ops for peer sync (stored in undo_sync_ops)
 pub fn EgWalkerProxy::undo(self : EgWalkerProxy) -> Unit {
-  if not(self.undo_enabled) {
+  if !self.undo_enabled {
     return
   }
   self.is_applying_remote = true
@@ -199,7 +199,7 @@ pub fn EgWalkerProxy::undo(self : EgWalkerProxy) -> Unit {
 /// Uses UndoManager via crdt module FFI when enabled
 /// Returns JSON string of ops for peer sync (stored in undo_sync_ops)
 pub fn EgWalkerProxy::redo(self : EgWalkerProxy) -> Unit {
-  if not(self.undo_enabled) {
+  if !self.undo_enabled {
     return
   }
   self.is_applying_remote = true
@@ -214,7 +214,7 @@ pub fn EgWalkerProxy::redo(self : EgWalkerProxy) -> Unit {
 ///|
 /// Check if undo is possible
 pub fn EgWalkerProxy::can_undo(self : EgWalkerProxy) -> Bool {
-  if not(self.undo_enabled) {
+  if !self.undo_enabled {
     return false
   }
   undo_manager_can_undo(self.doc)
@@ -223,7 +223,7 @@ pub fn EgWalkerProxy::can_undo(self : EgWalkerProxy) -> Bool {
 ///|
 /// Check if redo is possible
 pub fn EgWalkerProxy::can_redo(self : EgWalkerProxy) -> Bool {
-  if not(self.undo_enabled) {
+  if !self.undo_enabled {
     return false
   }
   undo_manager_can_redo(self.doc)

@@ -10,7 +10,7 @@
 /// Create a self-aware proxy object that tracks mutations
 ///
 /// # Example
-/// ```moonbit
+/// ```moonbit nocheck
 /// let state = proxy(js_object())
 /// ```
 pub fn proxy(initial_state : ValtioProxy) -> ValtioProxy = "valtio" "proxy"
@@ -22,7 +22,7 @@ pub fn proxy(initial_state : ValtioProxy) -> ValtioProxy = "valtio" "proxy"
 /// In React, use `use_snapshot` instead.
 ///
 /// # Example
-/// ```moonbit
+/// ```moonbit nocheck
 /// let state = proxy({ count: 0 })
 ///
 /// let snap = snapshot(state)
@@ -36,7 +36,7 @@ pub fn snapshot(proxy_state : ValtioProxy) -> ValtioSnapshot = "valtio/vanilla" 
 /// The callback is invoked whenever any part of the subscribed state changes.
 ///
 /// # Example
-/// ```moonbit
+/// ```moonbit nocheck
 /// let state = proxy({ count: 0 })
 ///
 /// let unsub = subscribe(state, fn() { println("State changed!") })
@@ -64,7 +64,7 @@ pub fn subscribe_with_ops(
 /// Unsubscribe from state changes
 ///
 /// # Example
-/// ```moonbit
+/// ```moonbit nocheck
 /// let unsub = subscribe(state, callback)
 /// unsubscribe(unsub)  // Stop listening to changes
 /// ```

@@ -13,7 +13,7 @@ pub fn example_create_proxy_from_object() -> Unit {
   set_int(state, "count", 0)
   let proxy_state = proxy(state)
   let count = get_int(proxy_state, "count")
-  println("Count: \{count}")  // Should print: Count: 0
+  println("Count: \{count}") // Should print: Count: 0
 }
 
 ///|
@@ -24,7 +24,7 @@ pub fn example_create_proxy_from_json() -> Unit {
   let proxy_state = proxy(state)
   let count = get_int(proxy_state, "count")
   let text = get_string(proxy_state, "text")
-  println("Count: \{count}, Text: \{text}")  // Should print: Count: 42, Text: hello
+  println("Count: \{count}, Text: \{text}") // Should print: Count: 42, Text: hello
 }
 
 ///|
@@ -38,7 +38,7 @@ pub fn example_mutate_proxy_properties() -> Unit {
   // Mutate
   set_int(proxy_state, "count", 10)
   let count = get_int(proxy_state, "count")
-  println("Updated count: \{count}")  // Should print: Updated count: 10
+  println("Updated count: \{count}") // Should print: Updated count: 10
 }
 
 ///|
@@ -69,7 +69,7 @@ pub fn example_take_snapshot() -> Unit {
   let proxy_state = proxy(state)
   let snap = snapshot(proxy_state)
   let json = to_json(snap)
-  println("Snapshot: \{json}")  // Should print: Snapshot: {"count":5}
+  println("Snapshot: \{json}") // Should print: Snapshot: {"count":5}
 }
 
 ///|
@@ -84,7 +84,7 @@ pub fn example_nested_proxy_objects() -> Unit {
   set_string(app, "theme", "dark")
   let proxy_state = proxy(app)
   let theme = get_string(proxy_state, "theme")
-  println("Theme: \{theme}")  // Should print: Theme: dark
+  println("Theme: \{theme}") // Should print: Theme: dark
 }
 
 ///|

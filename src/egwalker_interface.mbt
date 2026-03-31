@@ -3,19 +3,13 @@
 // Defines the interface types needed for integration without direct dependency
 
 ///|
-/// CRDT Operation Type
-/// Represents a single CRDT operation
-#external
-///|
 /// External handle for a CRDT operation.
+#external
 pub type CRDTOperation
 
 ///|
-/// CRDT Document Type
-/// Represents the event-graph-walker Document
-#external
-///|
 /// External handle for a CRDT document instance.
+#external
 pub type CRDTDocument
 
 ///|

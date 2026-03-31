@@ -6,24 +6,18 @@
 /// Foreign types representing Valtio's JavaScript objects
 
 ///|
-/// A Valtio proxy object that tracks mutations
-#external
-///|
 /// External handle for a Valtio proxy object.
+#external
 pub type ValtioProxy
 
 ///|
-/// An immutable snapshot of proxy state for rendering
-#external
-///|
 /// External handle for a Valtio snapshot.
+#external
 pub type ValtioSnapshot
 
 ///|
-/// A subscription handle that can be used to unsubscribe
-#external
-///|
 /// External handle for a Valtio subscription.
+#external
 pub type ValtioSubscription
 
 ///|
